@@ -21,7 +21,8 @@ class Student(object):
         self.env, _ = load_env_and_model(args.env, args.algo, args.folder)
 
         num_inputs = self.env.observation_space.shape[0]
-        num_actions = self.env.action_space.shape[0]
+        # num_actions = self.env.action_space.shape[0]
+        num_actions = self.env.action_space.n
         self.training_batch_size = args.student_batch_size
         self.testing_batch_size = args.testing_batch_size
         self.loss_metric = args.loss_metric

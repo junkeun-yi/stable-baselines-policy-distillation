@@ -112,7 +112,7 @@ def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
                 episode_reward += reward[0]
                 ep_len += 1
 
-                if done:
+                if done or t == 999: # FIXME: at done or end of horizon
                     # NOTE: for env using VecNormalize, the mean reward
                     # is a normalized reward when `--norm_reward` flag is passed
                     print(f"Episode Reward: {episode_reward:.2f}")
@@ -134,6 +134,7 @@ def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
             # log stats
             num_steps += (t + 1)
             num_episodes += 1
+            print(episode_rewards)
             total_reward = sum(episode_rewards)
             min_reward = min(episode_rewards)
             max_reward = max(episode_rewards)
