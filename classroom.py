@@ -20,7 +20,7 @@ class Student(object):
     def __init__(self, args, optimizer=None):
         self.env, _ = load_env_and_model(args.env, args.algo, args.folder)
 
-        num_inputs = self.env.observation_space.shape[0]
+        num_inputs = self.env.observation_space.shape[0]*self.env.observation_space.shape[1]
         # num_actions = self.env.action_space.shape[0]
         num_actions = self.env.action_space.n
         self.training_batch_size = args.student_batch_size
@@ -34,14 +34,17 @@ class Student(object):
     def train(self, expert_data):
         batch = random.sample(expert_data, self.training_batch_size)
         # print(batch[0])
-        states = torch.stack([x[0] for x in batch])
-        means_teacher = torch.stack([x[1] for x in batch])
-
-        fake_std = torch.from_numpy(np.array([1e-6]*len(means_teacher[0]))) # for deterministic
+        states = torch.stack([torch.from_numpy(x[0]) for x in batch])
+        states = states.reshape((self.training_batch_size, states.shape[1]*states.shape[2]))/255
+        means_teacher = torch.stack([x[1] for x in batch]) # means of actions
+        # fake_std = torch.from_numpy(np.array([1e-6]*len(means_teacher))) # for deterministic
+        fake_std = torch.from_numpy(np.array([1e-6])) # FIXME
         stds_teacher = torch.stack([fake_std for x in batch])
-
-        means_student = self.policy.mean_action(states)
-        stds_student = self.policy.get_std(states)
+        
+        means_student = self.policy.mean_action(states) # (1000, 3) 
+        means_student = torch.mean(means_student, dim=1) # FIXME a hack, has 3 actions but just averaged
+        stds_student = self.policy.get_std(states) # (1000)
+        stds_student = torch.mean(stds_student, dim=1) # FIXME a hack, has 3 actions but just averaged
         if self.loss_metric == 'kl':
             loss = get_kl([means_teacher, stds_teacher], [means_student, stds_student])
         elif self.loss_metric == 'wasserstein':
