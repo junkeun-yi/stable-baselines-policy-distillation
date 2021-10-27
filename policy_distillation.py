@@ -19,6 +19,7 @@ from utils.models import *
 import gym
 from utils.agent_pd_baselines import load_env_and_model
 from utils2 import ALGOS
+import random
 
 # teacher policy & student policy
 from classroom import Teacher,Student
@@ -38,6 +39,7 @@ def main(args):
     # policy and envs for sampling
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    random.seed(args.seed)
     exp_date = strftime('%Y.%m.%d', localtime(time()))
     writer = SummaryWriter(log_dir='./exp_data/{}/{}_{}'.format(exp_date, args.env, time()))
 

@@ -100,6 +100,7 @@ def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
 
         episode_rewards, episode_lengths = [], []
         while num_steps < min_batch_size: 
+            print("HERE!!")
             obs = env.reset()
             state = None
             episode_reward = 0.0
@@ -107,6 +108,7 @@ def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
 
             for t in range(1000):
                 action, state = model.predict(obs, state=state, deterministic=True)
+
                 next_state, reward, done, _ = env.step(action)
 
                 episode_reward += reward[0]
@@ -183,6 +185,7 @@ class AgentCollection:
 
     def get_expert_sample(self, batch_size, deterministic=True):
         # print("get_expert_sample called!!")
+        print("Getting memory")
         memories, logs = self.collect_samples(batch_size)
         teacher_rewards = [log['avg_reward'] for log in logs if log is not None]
         teacher_average_reward = np.array(teacher_rewards).mean()
@@ -190,14 +193,16 @@ class AgentCollection:
         # construct training dataset containing pairs {X:state, Y:output of teacher policy}
         dataset = []
         for memory, policy in zip(memories, self.policies):
-            batch = memory.sample()
-            batched_state = np.array(batch.state).reshape(-1, policy.env.observation_space.shape[0])
-            states = torch.from_numpy(batched_state).to(torch.float).to('cpu')
-            act_dist = torch.from_numpy(policy.predict(states, deterministic=deterministic)[0])
+            batch = memory.sample() # shape (1000, 1, 84, 84, 1)
+            # batched_state = np.array(batch.state).reshape(-1, policy.env.observation_space.shape[0]) # shape (7056000, 1)
+            states = np.array(batch.state).squeeze(1) # (1000, 84, 84, 1)
+            # states = torch.from_numpy(batched_state).to(torch.float).to('cpu')
+            act_dist = torch.from_numpy(policy.predict(states, deterministic=deterministic)[0]) # Tensor
             dataset += [(state, act_dist) for state, act_dist in zip(states, act_dist)]
         return dataset, teacher_average_reward
 
     def exercise(self, env, policy, render=True, min_batch_size=10000, pid=0):
+        #FIXME: !!!
         torch.randn(pid)
         log = dict()
         memory = Memory()
@@ -212,9 +217,13 @@ class AgentCollection:
             reward_episode = 0
 
             for t in range(1000):
-                state_var = tensor(state).unsqueeze(0)
-                with torch.no_grad():
-                    action = policy.mean_action(state_var.to(torch.float))[0].numpy()
+                state_var = tensor(state)
+                state_var = torch.reshape(state_var, (1, -1))
+                with torch.no_grad(): #Input (1, 7056) wants (7056, 64)
+                    # action = policy.mean_action(state_var.to(torch.float))[0].numpy()
+                    action = np.array([torch.argmax(policy.mean_action(state_var.to(torch.float))[0]).item()])
+                    # action = torch.max(policy.mean_action(state_var.to(torch.float))).numpy()
+                    # print(action)
                 next_state, reward, done, _ = env.step(action)
                 reward_episode += reward
 

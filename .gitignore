@@ -2,5 +2,6 @@
 venv/
 __pycache__/
 rl-trained-agents/
+teacher/
 exp_data/
 distilled-agents/
