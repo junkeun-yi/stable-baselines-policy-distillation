@@ -13,7 +13,7 @@ from stable_baselines3.common.utils import set_random_seed
 
 import utils2.import_envs  # noqa: F401 pylint: disable=unused-import
 from utils2 import ALGOS, create_test_env, get_latest_run_id, get_saved_hyperparams
-
+import random
 
 ################################################################
 # to clear cv2 Import error
@@ -85,7 +85,7 @@ def load_env_and_model(env_id,algo,folder):
     return env, model
 
 
-def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
+def sample_generator(env, model, render=True, min_batch_size=10000,id_=0, eps_thresh=0.05):
     log = dict()
     memory = Memory()
 
@@ -94,13 +94,12 @@ def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
     min_reward = 1e6
     max_reward = -1e6
     num_episodes = 0
-  
+
     # main loop to enjoy for n_timesteps..
     try:
 
         episode_rewards, episode_lengths = [], []
         while num_steps < min_batch_size: 
-            print("HERE!!")
             obs = env.reset()
             state = None
             episode_reward = 0.0
@@ -108,7 +107,9 @@ def sample_generator(env, model, render=True, min_batch_size=10000,id_=0):
 
             for t in range(1000):
                 action, state = model.predict(obs, state=state, deterministic=True)
-
+                sample_random = random.random()
+                if sample_random < eps_thresh:
+                    action = np.random.choice(3, 1) #FIXME: HARDCODED
                 next_state, reward, done, _ = env.step(action)
 
                 episode_reward += reward[0]
@@ -164,12 +165,13 @@ class AgentCollection:
         self.num_agents = num_agents
         self.num_teachers = len(policies)
 
-    def collect_samples(self, min_batch_size, exercise=False):
+    def collect_samples(self, min_batch_size, exercise=False, eps_thresh=0.05):
+        print(eps_thresh)
         # print("collect_samples called!!")
         results = []
         for i in range(self.num_teachers):
             if not exercise:
-                results.append(sample_generator(self.envs[i], self.policies[i], self.render, min_batch_size, i))
+                results.append(sample_generator(self.envs[i], self.policies[i], self.render, min_batch_size, i, eps_thresh))
             else:
                 results.append(self.exercise(self.envs[i], self.policies[i], self.render, min_batch_size, i))
         worker_logs = [None] * self.num_agents
@@ -183,10 +185,11 @@ class AgentCollection:
         # print("collect_samples done")
         return worker_memories, worker_logs
 
-    def get_expert_sample(self, batch_size, deterministic=True):
+    def get_expert_sample(self, batch_size, deterministic=True, eps_thresh=0.05):
+        print(eps_thresh)
         # print("get_expert_sample called!!")
         print("Getting memory")
-        memories, logs = self.collect_samples(batch_size)
+        memories, logs = self.collect_samples(batch_size, eps_thresh=eps_thresh)
         teacher_rewards = [log['avg_reward'] for log in logs if log is not None]
         teacher_average_reward = np.array(teacher_rewards).mean()
         # TODO better implementation of dataset and sampling
@@ -197,8 +200,8 @@ class AgentCollection:
             # batched_state = np.array(batch.state).reshape(-1, policy.env.observation_space.shape[0]) # shape (7056000, 1)
             states = np.array(batch.state).squeeze(1) # (1000, 84, 84, 1)
             # states = torch.from_numpy(batched_state).to(torch.float).to('cpu')
-            act_dist = torch.from_numpy(policy.predict(states, deterministic=deterministic)[0]) # Tensor
-            dataset += [(state, act_dist) for state, act_dist in zip(states, act_dist)]
+            #act_dist = torch.from_numpy(policy.predict(states, deterministic=deterministic)[0]) # Tensor
+            dataset += [(state, action) for state, action in zip(states, batch.action)]
         return dataset, teacher_average_reward
 
     def exercise(self, env, policy, render=True, min_batch_size=10000, pid=0):
@@ -221,6 +224,7 @@ class AgentCollection:
                 state_var = torch.reshape(state_var, (1, -1))
                 with torch.no_grad(): #Input (1, 7056) wants (7056, 64)
                     # action = policy.mean_action(state_var.to(torch.float))[0].numpy()
+
                     action = np.array([torch.argmax(policy.mean_action(state_var.to(torch.float))[0]).item()])
                     # action = torch.max(policy.mean_action(state_var.to(torch.float))).numpy()
                     # print(action)

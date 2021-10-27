@@ -36,7 +36,13 @@ class Student(object):
         # print(batch[0])
         states = torch.stack([torch.from_numpy(x[0]) for x in batch])
         states = states.reshape((self.training_batch_size, states.shape[1]*states.shape[2]))/255
-        means_teacher = torch.stack([ torch.tensor([x[1].item(),0,0]) for x in batch]) # FIXME means of actions
+        teacher_act_dist = []
+        for x in batch:
+            curr_action_prob = [0,0,0]
+            curr_action_prob[x[1].item()] = 1
+            teacher_act_dist.append(torch.tensor(curr_action_prob))
+        means_teacher = torch.stack(teacher_act_dist)
+        #means_teacher = torch.stack([ torch.tensor([x[1].item(),0,0]) for x in batch]) # FIXME means of actions
         # fake_std = torch.from_numpy(np.array([1e-6]*len(means_teacher))) # for deterministic
         # #fake_std = torch.from_numpy(np.array([1e-6])) # FIXME
         stds_teacher = torch.stack([torch.tensor([1e-6,1e-6,1e-6]) for x in batch]) #FIXME
@@ -72,8 +78,8 @@ class Teacher(object):
         self.expert_batch_size = args.sample_batch_size
         self.agents = AgentCollection(self.envs, self.policies, 'cpu', render=args.render, num_agents=args.agent_count)
 
-    def get_expert_sample(self):
-        return self.agents.get_expert_sample(self.expert_batch_size)
+    def get_expert_sample(self, eps=0.05):
+        return self.agents.get_expert_sample(self.expert_batch_size, eps_thresh=eps)
 
 
 class TrainedStudent(object):

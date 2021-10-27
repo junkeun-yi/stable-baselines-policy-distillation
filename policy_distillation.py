@@ -39,7 +39,8 @@ def main(args):
     # policy and envs for sampling
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    random.seed(args.seed)
+    random.seed(args.seed) 
+
     exp_date = strftime('%Y.%m.%d', localtime(time()))
     writer = SummaryWriter(log_dir='./exp_data/{}/{}_{}'.format(exp_date, args.env, time()))
 
@@ -71,7 +72,7 @@ def main(args):
         if iter > args.num_student_episodes:
             break
         if iter % args.sample_interval == 1:
-            expert_data, expert_reward = teachers.get_expert_sample()
+            expert_data, expert_reward = teachers.get_expert_sample(args.eps)
         
         loss = student.train(expert_data)
         if iter % (args.test_interval/10) == 0: # for logging
@@ -119,6 +120,7 @@ if __name__ == '__main__':
                         help='expert batch size for each teacher (default: 10000)')
     parser.add_argument('--render', action='store_true',
                         help='render the environment')
+    parser.add_argument("--eps", type=float, default=0.05, help="epsilon for epsilon greedy teacher (noisy teacher exp)")
 
     # For Student policy
     parser.add_argument('--lr', type=float, default=1e-3, metavar='G',
